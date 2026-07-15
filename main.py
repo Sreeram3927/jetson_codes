@@ -9,6 +9,9 @@ from vision import VisionSystem
 from protocol import ProtocolManager
 
 async def main():
+    # Grab the active event loop so we can pass things to it from threads
+    loop = asyncio.get_running_loop()
+
     # 1. Initialize Communications
     esp_comms = ESPCommunicator()
     arduino_comms = ArduinoCommunicator()
@@ -23,8 +26,21 @@ async def main():
     except Exception as e:
         print(f"Failed to open Arduino port: {e}")
 
-    # 2. Initialize Vision System
-    vision = VisionSystem(target_detected_callback=esp_comms.trigger_targeting)
+    # --- Thread-Safe Frontend Broadcaster ---
+    def send_targets_to_frontend(targets):
+        """ This runs in the Vision Thread but safely triggers an async broadcast """
+        payload = {
+            "type": "target_locations",
+            "targets": targets # e.g. [{"x": 100, "y": 200, "conf": 0.85}, ...]
+        }
+        # Schedule the coroutine safely in the main asyncio loop
+        asyncio.run_coroutine_threadsafe(esp_comms.broadcast_ws(payload), loop)
+
+    # 2. Initialize Vision System with BOTH callbacks
+    vision = VisionSystem(
+        target_detected_callback=esp_comms.trigger_targeting,
+        detections_callback=send_targets_to_frontend
+    )
     vision.setup()
 
     # 3. Start Vision in a separate background thread

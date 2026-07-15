@@ -4,10 +4,13 @@ import cv2
 import subprocess
 from ultralytics import YOLO
 from config import Config
+from transformations import FrameTransformation
 
 class VisionSystem:
-    def __init__(self, target_detected_callback=None):
+    def __init__(self, target_detected_callback=None, detections_callback=None):
         self.target_detected_callback = target_detected_callback
+        self.detections_callback = detections_callback
+        self.transformer = FrameTransformation()
         self.pipeline = rs.pipeline()
         self.align = rs.align(rs.stream.color)
         self.gst_process = None
@@ -69,31 +72,46 @@ class VisionSystem:
 
                 results = self.model.predict(source=color_image, conf=Config.CONFIDENCE_THRESHOLD, verbose=False)
 
+                # 2. Initialize a list to hold all unique targets in this frame
+                current_frame_targets = []
+
                 for result in results:
                     for box in result.boxes:
                         x1, y1, x2, y2 = map(int, box.xyxy[0])
                         conf = float(box.conf)
                         
-                        # Get the 2D pixel center of the weed
+                        # Raw pixels
                         cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-                        
-                        # We still get depth just to filter out bad detections 
-                        # (e.g. ignoring things too high or too far)
                         z_dist = depth_frame.get_distance(cx, cy)
 
                         if 0.01 < z_dist < 3.0:
-                            # THE FIX: Stop using deproject! Just pass the raw pixels (cx, cy)
-                            if self.target_detected_callback:
-                                # We no longer pass Z, because the table height is always 620mm
-                                self.target_detected_callback(cx, cy)
+                            # 3. Transform pixels to manipulator coordinates immediately
+                            x_man, y_man, z_man = self.transformer.getTransformedCoordinates(cx, cy)
+                            
+                            # Add the TRANSFORMED coordinates to our frame list
+                            current_frame_targets.append({
+                                "x": round(x_man, 2), 
+                                "y": round(y_man, 2), 
+                                "z": round(z_man, 2), 
+                                "conf": round(conf, 2)
+                            })
 
-                            # Draw visuals
+                            # Send the physical manipulator coordinates to the ESP32!
+                            # if self.target_detected_callback:
+                                # self.target_detected_callback(x_man, y_man, z_man)
+
+                            # Draw visuals (OpenCV still needs raw pixels to draw on the image)
                             cv2.rectangle(color_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
                             cv2.circle(color_image, (cx, cy), 4, (0, 0, 255), -1)
                             
-                            # Update label to show pixels instead of 3D coords
-                            label = f"Box {conf:.2f} | Pixels: {cx}, {cy}"
+                            # Update label to show physical coordinates instead of pixels
+                            # label = f"Conf {conf:.2f} | U:{cx:.1f} V:{cy:.1f}"
+                            label = f"Target #{len(current_frame_targets)}"
                             cv2.putText(color_image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+                # 4. Trigger the callback to send the full transformed array to the frontend
+                if self.detections_callback and current_frame_targets:
+                    self.detections_callback(current_frame_targets)
 
                 # Write directly to the GStreamer command line process
                 # if self.gst_process and self.gst_process.stdin:
