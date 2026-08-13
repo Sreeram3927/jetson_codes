@@ -86,7 +86,12 @@ class VisionSystem:
 
                         if 0.01 < z_dist < 3.0:
                             # 3. Transform pixels to manipulator coordinates immediately
-                            x_man, y_man, z_man = self.transformer.getTransformedCoordinates(cx, cy)
+                            camera_point = rs.rs2_deproject_pixel_to_point(
+                                depth_intrin,
+                                [cx, cy],
+                                z_dist,
+                            )
+                            x_man, y_man, z_man = self.transformer.getTransformedCoordinates(camera_point)
                             
                             # Add the TRANSFORMED coordinates to our frame list
                             current_frame_targets.append({
