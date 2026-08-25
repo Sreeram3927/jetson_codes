@@ -1,0 +1,6 @@
+# Models are volume-mounted at runtime (see docker-compose.yml), not
+# baked into the image.
+ai_models/
+ 
+__pycache__/
+*.pyc

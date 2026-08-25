@@ -1,6 +1,0 @@
-pyrealsense2
-pyserial
-numpy==1.23.5
-websockets
-opencv-contrib-python==4.7.0
-esptool

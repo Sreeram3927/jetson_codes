@@ -1,0 +1,6 @@
+# ultralytics, torch, torchvision, opencv already ship in the
+# ultralytics/ultralytics:latest-jetson-jetpack4 base image — don't
+# reinstall them here, it'll pull non-Jetson wheels and break CUDA.
+
+pyrealsense2
+numpy==1.23.5
