@@ -41,7 +41,7 @@ class CameraTargetBridgeNode(Node):
         host = self.get_parameter('host').value
         port = self.get_parameter('port').value
 
-        self.pub = self.create_publisher(TargetArray, '/camera/targets_raw', 10)
+        self.pub = self.create_publisher(TargetArray, '/camera/targets', 10)
 
         self._server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
