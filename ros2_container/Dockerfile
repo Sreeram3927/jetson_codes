@@ -26,7 +26,7 @@ RUN mkdir -p /ros2_lib/src && \
     colcon build --symlink-install
 
 # ROS2 environments
-RUN echo "/opt/ros/foxy/install/setup.bash" >> /root/.bashrc && \
+RUN echo "source /opt/ros/foxy/install/setup.bash" >> /root/.bashrc && \
     echo "source /ros2_lib/install/setup.bash" >> /root/.bashrc
 
 WORKDIR /ros2_ws

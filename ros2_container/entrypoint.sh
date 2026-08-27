@@ -19,6 +19,7 @@ echo "Workspace build complete"
 # Source workspace if it was successfully built
 if [ -f /ros2_ws/install/setup.bash ]; then
     source /ros2_ws/install/setup.bash
+    echo "source /ros2_ws/install/setup.bash" >> /root/.bashrc
 fi
 
 echo "ROS_DISTRO: $ROS_DISTRO"
