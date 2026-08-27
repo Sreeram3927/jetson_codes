@@ -3,6 +3,7 @@ version: "3.8"
 services:
   mediamtx:
     image: bluenviron/mediamtx:latest
+    container_name: mediamtx
     network_mode: host   # simplest: RTSP/HLS/WebRTC all need multiple
                           # ports, host networking avoids publishing each one
     volumes:
@@ -41,9 +42,4 @@ services:
       - RELAY_PORT=9999
 
     restart: unless-stopped
-    # depends_on only controls container start order, not readiness — the
-    # relay's socket server may not be listening yet when this starts.
-    # detection_client.py already retries on its own, so this is just a
-    # small courtesy delay, not a hard requirement.
-    # command: >
-    #   bash -c "sleep 5 && python3 main.py"
+

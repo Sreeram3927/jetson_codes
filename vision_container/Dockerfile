@@ -22,5 +22,5 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 # COPY . /workspace
 
-# CMD ["python3", "main.py"]
-CMD ["sleep", "infinity"]
+CMD ["python3", "main.py"]
+# CMD ["sleep", "infinity"]
