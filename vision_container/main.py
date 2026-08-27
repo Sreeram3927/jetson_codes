@@ -1,6 +1,5 @@
 from vision_system import VisionSystem
 
-
 def main():
     vision = VisionSystem()
     try:

@@ -10,6 +10,7 @@ services:
     restart: unless-stopped
 
   ros2:
+    container_name: ros2
     build:
       context: ./ros2_container
     volumes:
@@ -23,23 +24,26 @@ services:
     restart: unless-stopped
 
   vision:
+    container_name: vision
     build:
       context: ./vision_container
+    volumes:
+      - ./vision_container:/workspace
+    # volumes:
+    #   - ./vision_container/ai_models:/workspace/ai_models
     network_mode: host
     runtime: nvidia
     privileged: true   # needed for RealSense USB + NVENC access
     depends_on:
-      - ros2
       - mediamtx
     environment:
       - RELAY_HOST=localhost
       - RELAY_PORT=9999
-    volumes:
-      - ./vision_container/ai_models:/workspace/ai_models
+
     restart: unless-stopped
     # depends_on only controls container start order, not readiness — the
     # relay's socket server may not be listening yet when this starts.
     # detection_client.py already retries on its own, so this is just a
     # small courtesy delay, not a hard requirement.
-    command: >
-      bash -c "sleep 5 && python3 main.py"
+    # command: >
+    #   bash -c "sleep 5 && python3 main.py"

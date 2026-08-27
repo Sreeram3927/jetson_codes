@@ -2,7 +2,7 @@
 # Vision container: RealSense capture + YOLO/TensorRT inference + RTSP push.
 # Talks to the ROS2 container only via a plain TCP socket (detection_client.py).
 # ============================================================
-FROM ultralytics/ultralytics:latest-jetson-jetpack4
+FROM ultralytics/ultralytics@sha256:3217e85d3760be4962efaeaae73117d569aed33bfded306981319db24800ce71
 
 RUN apt-get update && \
     apt-get install -y \
@@ -15,6 +15,12 @@ WORKDIR /workspace
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-COPY . /workspace
+#---------------------------------------------
+# Include the below line, if you dont want to
+# bind the volumes, sutiable for prod builds
+#---------------------------------------------
 
-CMD ["python3", "main.py"]
+# COPY . /workspace
+
+# CMD ["python3", "main.py"]
+CMD ["sleep", "infinity"]

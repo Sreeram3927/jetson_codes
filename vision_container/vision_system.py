@@ -77,9 +77,12 @@ class VisionSystem:
                 current_frame_targets = []
 
                 for result in results:
+                    names = result.names
                     for box in result.boxes:
                         x1, y1, x2, y2 = map(int, box.xyxy[0])
                         conf = float(box.conf)
+                        class_id = int(box.cls[0])
+                        class_name = names[class_id]
 
                         cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
                         z_dist = depth_frame.get_distance(cx, cy)
@@ -93,11 +96,14 @@ class VisionSystem:
 
                             # Raw camera-frame point
                             current_frame_targets.append({
-                                "frame": "camera",
-                                "x": round(camera_point[0], 4),
-                                "y": round(camera_point[1], 4),
-                                "z": round(camera_point[2], 4),
-                                "conf": round(conf, 2)
+                                "id": class_id,
+                                "class": class_name,
+                                "position" : {
+                                    "x": round(camera_point[0], 4),
+                                    "y": round(camera_point[1], 4),
+                                    "z": round(camera_point[2], 4),
+                                },
+                                "confidence": round(conf, 2)
                             })
 
                             cv2.rectangle(color_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
