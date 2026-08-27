@@ -1,8 +1,11 @@
-venv/
+# Python cache files
 __pycache__/
 *.pyc
-mediamtx_server/LICENSE
-mediamtx_server/mediamtx
+
+
 ai_models/
-logs/
-upload/
+
+# ROS2 builds
+build/
+install/
+log/

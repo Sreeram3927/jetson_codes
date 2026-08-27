@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    network_mode: host   # simplest: RTSP/HLS/WebRTC all need multiple
+                          # ports, host networking avoids publishing each one
+    volumes:
+      - ./mediamtx_server/mediamtx.yml:/mediamtx.yml
+    restart: unless-stopped
+
+  ros2:
+    build:
+      context: ./ros2_container
+    volumes:
+      - ./ros2_container/ros2_ws:/ros2_ws
+    network_mode: host
+    runtime: nvidia
+    privileged: true   # simplest for serial (ESP32/Arduino) + device access on Nano;
+                        # narrow to explicit --device entries later if you prefer
+    
+    command: sleep infinity # Keep alive
+    restart: unless-stopped
+
+  vision:
+    build:
+      context: ./vision_container
+    network_mode: host
+    runtime: nvidia
+    privileged: true   # needed for RealSense USB + NVENC access
+    depends_on:
+      - ros2
+      - mediamtx
+    environment:
+      - RELAY_HOST=localhost
+      - RELAY_PORT=9999
+    volumes:
+      - ./vision_container/ai_models:/workspace/ai_models
+    restart: unless-stopped
+    # depends_on only controls container start order, not readiness — the
+    # relay's socket server may not be listening yet when this starts.
+    # detection_client.py already retries on its own, so this is just a
+    # small courtesy delay, not a hard requirement.
+    command: >
+      bash -c "sleep 5 && python3 main.py"
