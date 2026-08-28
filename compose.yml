@@ -23,10 +23,14 @@ services:
     
     volumes:
       - ./ros2_container/ros2_ws:/ros2_ws
+      - /dev/esp32:/dev/esp32
+      - /dev/arduino_uno:/dev/arduino_uno
+    group_add:
+      - dialout
+      - tty
     network_mode: host
     runtime: nvidia
     privileged: true   # simplest for serial (ESP32/Arduino) + device access on Nano;
-                        # narrow to explicit --device entries later if you prefer
     
     command: sleep infinity # Keep alive
     restart: unless-stopped
