@@ -12,8 +12,15 @@ services:
 
   ros2:
     container_name: ros2
+
     build:
       context: ./ros2_container
+      args:
+        USERNAME: jetson
+        USER_UID: 1000
+        USER_GID: 1000
+    user: "1000:1000"
+    
     volumes:
       - ./ros2_container/ros2_ws:/ros2_ws
     network_mode: host
@@ -26,8 +33,18 @@ services:
 
   vision:
     container_name: vision
+
     build:
       context: ./vision_container
+      args:
+        USERNAME: jetson
+        USER_UID: 1000
+        USER_GID: 1000
+    user: "1000:1000"
+    group_add:
+      - video
+      - plugdev
+    
     volumes:
       - ./vision_container:/workspace
     # volumes:

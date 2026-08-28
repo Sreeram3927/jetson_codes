@@ -6,15 +6,25 @@
 # ============================================================
 FROM dustynv/ros:foxy-pytorch-l4t-r32.7.1
 
+# Create a non-root user that matches host UID/GID (usually 1000 on Jetson)
+ARG USERNAME=jetson
+ARG USER_UID=1000
+ARG USER_GID=1000
+
 # Fix expired ROS GPG key + install system dependencies
-RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
-        -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+        -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        sudo \
         avrdude \
         python3-pip \
         python3-colcon-common-extensions \
         git \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME \
     && rm -rf /var/lib/apt/lists/*
 
 # Build rosbridge_suite from source (Foxy-compatible tag)
@@ -25,11 +35,18 @@ RUN mkdir -p /ros2_lib/src && \
     . /opt/ros/foxy/install/setup.bash && \
     colcon build --symlink-install
 
-# ROS2 environments
-RUN echo "source /opt/ros/foxy/install/setup.bash" >> /root/.bashrc && \
-    echo "source /ros2_lib/install/setup.bash" >> /root/.bashrc
+# Put ROS environment into the non-root user's bashrc
+RUN echo "source /opt/ros/foxy/install/setup.bash" >> /home/$USERNAME/.bashrc && \
+    echo "source /ros2_lib/install/setup.bash" >> /home/$USERNAME/.bashrc && \
+    echo "if [ -f /ros2_ws/install/setup.bash ]; then source /ros2_ws/install/setup.bash; fi" >> /home/$USERNAME/.bashrc
+
+# Give the user ownership of the places we need
+RUN chown -R $USERNAME:$USERNAME /ros2_lib /home/$USERNAME
 
 WORKDIR /ros2_ws
+
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 #---------------------------------------------
 # Include the below line, if you dont want to
@@ -46,6 +63,9 @@ WORKDIR /ros2_ws
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+# Switch to non-root user
+USER $USERNAME
 
 ENTRYPOINT ["/entrypoint.sh"]
 # CMD ["ros2", "launch", "detection_relay", "bringup.launch.py"]
