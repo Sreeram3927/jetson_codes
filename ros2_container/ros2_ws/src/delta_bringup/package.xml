@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>delta_bringup</name>
+  <version>0.0.0</version>
+  <description>Launch files for the full Jetson-side node graph</description>
+  <maintainer email="sreeram3927@zohomail.in">Sreeram</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>delta_nodes</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
