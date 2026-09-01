@@ -23,8 +23,7 @@ services:
     
     volumes:
       - ./ros2_container/ros2_ws:/ros2_ws
-      - /dev/esp32:/dev/esp32
-      - /dev/arduino_uno:/dev/arduino_uno
+      - /dev:/dev
     group_add:
       - dialout
       - tty
