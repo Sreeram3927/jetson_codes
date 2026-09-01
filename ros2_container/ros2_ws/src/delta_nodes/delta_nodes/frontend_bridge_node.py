@@ -39,7 +39,7 @@ import rclpy
 from rclpy.node import Node
 import websockets
 
-from delta_msgs.msg import ManipulatorCommand, ManipulatorTelemetry
+from delta_msgs.msg import ManipulatorCommand, ManipulatorTelemetry, TargetArray
 from std_msgs.msg import Bool, String, UInt8
 
 TELEMETRY_RATE_HZ = 10
@@ -63,7 +63,7 @@ class FrontendBridgeNode(Node):
         self.create_subscription(ManipulatorTelemetry, '/manipulator/telemetry', self._on_telemetry, 10)
         self.create_subscription(UInt8, '/base/motion_state', self._on_motion_state, 10)
         self.create_subscription(Bool, '/system/autonomy_enabled', self._on_autonomy_state, 10)
-        self.create_subscription(String, '/manipulator/targets', self._on_target_detections, 10)
+        self.create_subscription(TargetArray, '/manipulator/targets', self._on_target_detections, 10)
 
         self.create_subscription(String, '/manipulator/log', self._on_log, 10)
         self.create_subscription(String, '/base/log', self._on_log, 10)
@@ -206,16 +206,8 @@ class FrontendBridgeNode(Node):
 
         asyncio.run_coroutine_threadsafe(self._send_to_all(payload), self._loop)
 
-    def _on_target_detections(self, msg: String):
-        if not self._clients:
-            return
-        try:
-            data = json.loads(msg.data)
-        except json.JSONDecodeError:
-            self.get_logger().warn("Malformed JSON on /vision/detections")
-            return
-
-        raw_targets = data.get('targets', [])
+    def _on_target_detections(self, msg: TargetArray):
+        
         targets = []
         for t in msg.targets:
             targets.append({
@@ -232,11 +224,6 @@ class FrontendBridgeNode(Node):
             "targets": targets,
         })
 
-
-        payload = json.dumps({
-            "type": "target_locations",
-            "targets": targets,
-        })
         asyncio.run_coroutine_threadsafe(self._send_to_all(payload), self._loop)
 
     def _on_log(self, data: String):

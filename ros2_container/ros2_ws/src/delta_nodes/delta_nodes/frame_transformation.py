@@ -44,8 +44,9 @@ class FrameTransformation:
         return x_rob, y_rob, z_rob
 
     def offset_to_manipulatorFrame(self, x, y, z):
-        # NOTE: ported as-is — currently a passthrough in your original code
-        # (the swap/shift logic is commented out there too).
+        x, y = y, x
+        y -= 38
+        y *= -1
         return float(x), float(y), float(z)
 
     def transform_to_robotFrame(self, camera_point):
@@ -56,8 +57,6 @@ class FrameTransformation:
     def getTransformedCoordinates(self, camera_point):
         x_rob, y_rob, z_rob = self.transform_to_robotFrame(camera_point)
         x, y, z = self.offset_to_manipulatorFrame(x_rob, y_rob, z_rob)
-        x, y = y, x
-        y -= 38
         return x, y, z
 
     def performHomography(self, u_pixel, v_pixel):
