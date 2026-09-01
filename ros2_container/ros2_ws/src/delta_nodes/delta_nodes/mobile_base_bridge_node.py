@@ -19,13 +19,15 @@ Publishes:   /base/log        (std_msgs/String)
 """
 
 import time
-
+import json
 import rclpy
 from rclpy.node import Node
 import serial
 
 from geometry_msgs.msg import Twist
 from std_msgs.msg import String, UInt8
+
+from . import protocol_manager
 
 MOTION_SETTLE_SEC = 0.4  # TODO: tune to your base's actual stopping inertia
 VELOCITY_EPSILON = 0.01  # below this magnitude counts as "stopped"
@@ -93,10 +95,10 @@ class MobileBaseBridgeNode(Node):
             self._rx_buffer += new_data
             while '\n' in self._rx_buffer:
                 line, self._rx_buffer = self._rx_buffer.split('\n', 1)
-                clean_line = line.strip()
-                if clean_line:
+                parsed = protocol_manager.parse_arduino_log(line)
+                if parsed:
                     out = String()
-                    out.data = clean_line
+                    out.data = json.dumps(parsed)
                     self.log_pub.publish(out)
         except Exception as e:
             self.get_logger().error(f"Arduino read error: {e}")

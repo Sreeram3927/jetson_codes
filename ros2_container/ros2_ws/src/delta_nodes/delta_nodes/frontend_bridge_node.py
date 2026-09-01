@@ -65,6 +65,9 @@ class FrontendBridgeNode(Node):
         self.create_subscription(Bool, '/system/autonomy_enabled', self._on_autonomy_state, 10)
         self.create_subscription(String, '/manipulator/targets', self._on_target_detections, 10)
 
+        self.create_subscription(String, '/manipulator/log', self._on_log, 10)
+        self.create_subscription(String, '/base/log', self._on_log, 10)
+
         self._clients = set()
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
@@ -236,6 +239,9 @@ class FrontendBridgeNode(Node):
         })
         asyncio.run_coroutine_threadsafe(self._send_to_all(payload), self._loop)
 
+    def _on_log(self, data: String):
+        asyncio.run_coroutine_threadsafe(self._send_to_all(data.data), self._loop)
+    
     async def _send_to_all(self, payload: str):
         if not self._clients:
             return

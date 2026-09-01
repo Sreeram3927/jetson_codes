@@ -17,7 +17,7 @@ Publishes:   /manipulator/telemetry (delta_msgs/ManipulatorTelemetry)
 """
 
 import struct
-
+import json
 import rclpy
 from rclpy.node import Node
 import serial
@@ -137,7 +137,7 @@ class ManipulatorBridgeNode(Node):
             parsed = protocol_manager.parse_esp_log(line)
             if parsed:
                 out = String()
-                out.data = str(parsed)
+                out.data = json.dumps(parsed)
                 self.log_pub.publish(out)
 
 

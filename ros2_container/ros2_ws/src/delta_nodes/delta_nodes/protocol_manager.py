@@ -11,6 +11,7 @@ fully known from your ESPCommunicator.process_serial_loop code).
 """
 import struct
 import re
+import json
 
 # Command Types
 COMMAND_TYPES = {
@@ -65,3 +66,28 @@ def parse_esp_log(line: str):
         }
     else:
         return {"type": "log", "level": "info", "timestamp": None, "tag": "System", "message": clean_line}
+    
+def parse_arduino_log(line: str):
+    clean_line = line.strip()
+    if not clean_line:
+        return None
+    
+    try:
+        data = json.loads(line)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+    # Make sure this is actually an Arduino log
+    if not isinstance(data, dict):
+        return None
+
+    if data.get("type") != "log":
+        return None
+    
+    return {
+        "type": "log",
+        "level": str(data.get("level", "info")),
+        "timestamp": data.get("timestamp"),
+        "tag": str(data.get("tag", "System")),
+        "message": str(data.get("message", ""))
+    }
