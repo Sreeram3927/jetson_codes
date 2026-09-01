@@ -71,40 +71,18 @@ class ManipulatorBridgeNode(Node):
             self.get_logger().warn("Serial port not open, dropping command")
             return
 
-        try:
-            if msg.mode == ManipulatorCommand.MODE_COORDINATE:
-                packet = protocol_manager.pack_coordinate_command(
-                    msg.coordinate_target.x, msg.coordinate_target.y, msg.coordinate_target.z
-                )
-            else:
-                # TODO: this mapping from ManipulatorCommand.mode -> the original
-                # string-based `command` field (e.g. "CMD_JOG", "CMD_STOP") needs
-                # your actual command vocabulary from protocol.py / your frontend
-                # JS — placeholder mapping below, confirm against the real one.
-                mode_to_cmd_str = {
-                    ManipulatorCommand.MODE_JOINT: "CMD_MOVE_JOINT",
-                    ManipulatorCommand.MODE_JOG: "CMD_JOG",
-                    ManipulatorCommand.MODE_ESTOP: "CMD_STOP",
-                    ManipulatorCommand.MODE_LASER: "CMD_LASER",
-                }
-                cmd_str = mode_to_cmd_str.get(msg.mode, "CMD_STOP")
-                # TODO: motorId ('T' for all axes in the original snippet) and
-                # valA/valB/valC mapping depends on cmd_str — placeholder below
-                # just forwards jog velocities / joint targets positionally.
-                if msg.mode == ManipulatorCommand.MODE_JOG:
-                    a, b, c = msg.jog_velocity
-                elif msg.mode == ManipulatorCommand.MODE_JOINT:
-                    a, b, c = msg.joint_target
-                else:
-                    a, b, c = 0.0, 0.0, 0.0
-                packet = protocol_manager.pack_joint_command(cmd_str, 'T', a, b, c)
-
-            self.ser.write(packet)
-        except NotImplementedError:
-            self.get_logger().error(
-                "protocol_manager packing not implemented yet — paste your real "
-                "protocol.py logic into protocol_manager.py"
+        if msg.mode == ManipulatorCommand.CMD_MOVE_COORDINATE:
+            packet = protocol_manager.pack_coordinate_command(
+                msg.mode, msg.coordinate_target.x, msg.coordinate_target.y, msg.coordinate_target.z
             )
+        else:
+            motor_id = msg.motor_id if msg.motor_id else 'T'
+            a, b, c = msg.joint_target
+            packet = protocol_manager.pack_joint_command(
+                msg.mode, motor_id, a, b, c
+            )
+
+        self.ser.write(packet)
 
     # ------------------------------------------------------------------
     # Inbound: serial bytes -> telemetry / log

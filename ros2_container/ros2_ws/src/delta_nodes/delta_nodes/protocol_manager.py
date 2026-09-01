@@ -28,17 +28,15 @@ LOG_LEVEL_MAP = {
     'E': 'error', 'W': 'warning', 'I': 'info', 'D': 'debug', 'V': 'verbose'
 }
 
-def pack_coordinate_command(x: float, y: float, z: float) -> bytes:
+def pack_coordinate_command(cmd_type: int, x: float, y: float, z: float) -> bytes:
     header = 0x5A
-    cmd_type = COMMAND_TYPES.get("CMD_MOVE_COORDINATE")
     checksum = int(x + y + z) & 0xFFFF
     
     return struct.pack('<BBfffH', header, cmd_type, float(x), float(y), float(z), checksum)
 
 
-def pack_joint_command(command: str, motor_id: str, val_a: float, val_b: float, val_c: float) -> bytes:
+def pack_joint_command(cmd_type: int, motor_id: str, val_a: float, val_b: float, val_c: float) -> bytes:
     header = 0x5A
-    cmd_type = COMMAND_TYPES.get(command, 0x00) 
     m_id = str(motor_id)[0].encode('ascii') if motor_id else b'T'
     checksum = int(val_a + val_b + val_c) & 0xFFFF
     
