@@ -42,6 +42,7 @@ Commands:
   stop    [SERVICE]   Stop all services or one service
   restart [SERVICE]   Restart all services or one service
   down                Stop and remove all containers/networks (keeps volumes)
+  build   [SERVICE]   Build all services or one service
   shell   <SERVICE>   Open interactive shell in a container
   exec    <SERVICE> <command...>   Run a command inside a running container
   logs    [SERVICE]   Follow logs (all or one service)
@@ -194,6 +195,23 @@ do_down() {
     info "Bringing everything down (containers + networks)..."
     "${COMPOSE_CMD[@]}" down
     ok "Done"
+}
+
+do_build() {
+    local target="${1:-all}"
+    if [[ "$target" == "all" ]]; then
+        info "Building all services..."
+        "${COMPOSE_CMD[@]}" build
+        ok "All services built"
+    else
+        if ! is_service_valid "$target"; then
+            err "Unknown service: $target (valid: ${SERVICES[*]})"
+            exit 1
+        fi
+        info "Building $target..."
+        "${COMPOSE_CMD[@]}" build "$target"
+        ok "$target built"
+    fi
 }
 
 do_shell() {
@@ -371,6 +389,9 @@ case "$CMD" in
         ;;
     down)
         do_down
+        ;;
+    build)
+        do_build
         ;;
     shell|term)
         do_shell "${1:-}"
