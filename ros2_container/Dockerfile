@@ -35,10 +35,17 @@ RUN mkdir -p /ros2_lib/src && \
     . /opt/ros/foxy/install/setup.bash && \
     colcon build --symlink-install
 
-# Put ROS environment into the non-root user's bashrc
-RUN echo "source /opt/ros/foxy/install/setup.bash" >> /home/$USERNAME/.bashrc && \
-    echo "source /ros2_lib/install/setup.bash" >> /home/$USERNAME/.bashrc && \
-    echo "if [ -f /ros2_ws/install/setup.bash ]; then source /ros2_ws/install/setup.bash; fi" >> /home/$USERNAME/.bashrc
+# 1. For non-interactive shells (bridge exec, docker exec -c, scripts...)
+RUN echo 'source /opt/ros/foxy/install/setup.bash' > /ros_env.sh && \
+    echo 'source /ros2_lib/install/setup.bash' >> /ros_env.sh && \
+    echo 'if [ -f /ros2_ws/install/setup.bash ]; then source /ros2_ws/install/setup.bash; fi' >> /ros_env.sh
+
+ENV BASH_ENV=/ros_env.sh
+
+# 2. For interactive shells (bridge shell, docker exec -it ...)
+RUN echo 'source /opt/ros/foxy/install/setup.bash' >> /etc/bash.bashrc && \
+    echo 'source /ros2_lib/install/setup.bash' >> /etc/bash.bashrc && \
+    echo 'if [ -f /ros2_ws/install/setup.bash ]; then source /ros2_ws/install/setup.bash; fi' >> /etc/bash.bashrc
 
 # Give the user ownership of the places we need
 RUN chown -R $USERNAME:$USERNAME /ros2_lib /home/$USERNAME

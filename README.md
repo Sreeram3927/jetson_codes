@@ -18,3 +18,5 @@ sudo docker run -itd \
 # Convert AI model
 yolo export model=ai_models/boxes_ai.pt format=engine half=true device=0 opset=12 simplify=True
 
+# chmod +x js-bridge.sh
+# sudo cp js-bridge.sh /usr/local/bin/bridge
