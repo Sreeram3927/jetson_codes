@@ -7,7 +7,7 @@ ESPCommunicator asyncio implementation:
     this is known-working and unchanged.
   - Outbound command packing (ProtocolManager.pack_coordinate_command /
     pack_joint_command) is NOT ported — that file (protocol.py) wasn't
-    provided. See protocol_manager.py in this package: it has the same
+    provided. See esp_protocol.py in this package: it has the same
     function signatures as a drop-in placeholder, but raises
     NotImplementedError until the real packing logic is pasted in.
 
@@ -25,7 +25,7 @@ import serial
 from delta_msgs.msg import ManipulatorCommand, ManipulatorTelemetry
 from std_msgs.msg import String
 
-from . import protocol_manager
+from .protocol import esp_protocol
 
 
 class ManipulatorBridgeNode(Node):
@@ -72,13 +72,13 @@ class ManipulatorBridgeNode(Node):
             return
 
         if msg.mode == ManipulatorCommand.CMD_MOVE_COORDINATE:
-            packet = protocol_manager.pack_coordinate_command(
+            packet = esp_protocol.pack_coordinate_command(
                 msg.mode, msg.coordinate_target.x, msg.coordinate_target.y, msg.coordinate_target.z
             )
         else:
             motor_id = msg.motor_id if msg.motor_id else 'T'
             a, b, c = msg.joint_target
-            packet = protocol_manager.pack_joint_command(
+            packet = esp_protocol.pack_joint_command(
                 msg.mode, motor_id, a, b, c
             )
 
@@ -134,7 +134,7 @@ class ManipulatorBridgeNode(Node):
 
         while '\n' in self._text_buffer:
             line, self._text_buffer = self._text_buffer.split('\n', 1)
-            parsed = protocol_manager.parse_esp_log(line)
+            parsed = esp_protocol.parse_esp_log(line)
             if parsed:
                 out = String()
                 out.data = json.dumps(parsed)

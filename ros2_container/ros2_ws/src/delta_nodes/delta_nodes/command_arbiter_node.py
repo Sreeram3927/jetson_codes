@@ -28,7 +28,7 @@ from rclpy.node import Node
 
 from delta_msgs.msg import ManipulatorCommand
 from geometry_msgs.msg import PointStamped
-from std_msgs.msg import Bool, UInt8
+from std_msgs.msg import Bool, UInt8, String
 
 DEFAULT_AUTONOMOUS_FEED_RATE = 0.05  # m/s -- TODO: tune
 
@@ -40,12 +40,14 @@ class CommandArbiterNode(Node):
         self.autonomy_enabled = False
         # self.base_motion_state = 1  # default to MOVING (safe: gate closed) until we hear otherwise
 
-        self.cmd_pub = self.create_publisher(ManipulatorCommand, '/manipulator/cmd', 10)
+        self.manipulator_cmd_pub = self.create_publisher(ManipulatorCommand, '/manipulator/cmd', 10)
+        self.base_cmd_pub = self.create_publisher(String, '/base/cmd', 10)
 
         self.create_subscription(PointStamped, '/manipulator/target_selected', self._on_target, 10)
-        self.create_subscription(ManipulatorCommand, '/frontend/manual_manipulator_cmd', self._on_manual, 10)
+        self.create_subscription(ManipulatorCommand, '/frontend/manipulator_cmd', self._on_manipulator_cmd, 10)
         self.create_subscription(Bool, '/system/autonomy_enabled', self._on_autonomy_enabled, 10)
         # self.create_subscription(UInt8, '/base/motion_state', self._on_motion_state, 10)
+        self.create_subscription(String, '/frontend/base_cmd', self._on_base_cmd, 10)
 
     def _on_autonomy_enabled(self, msg: Bool):
         self.autonomy_enabled = msg.data
@@ -53,9 +55,13 @@ class CommandArbiterNode(Node):
     # def _on_motion_state(self, msg: UInt8):
     #     self.base_motion_state = msg.data
 
-    def _on_manual(self, msg: ManipulatorCommand):
+    def _on_manipulator_cmd(self, msg: ManipulatorCommand):
         # Manual always passes straight through.
-        self.cmd_pub.publish(msg)
+        self.manipulator_cmd_pub.publish(msg)
+        
+    def _on_base_cmd(self, msg: String):
+        # Manual always passes straight through.
+        self.base_cmd_pub.publish(msg)
 
     def _on_target(self, msg: PointStamped):
         if not self.autonomy_enabled:
@@ -67,7 +73,7 @@ class CommandArbiterNode(Node):
         cmd.mode = ManipulatorCommand.CMD_MOVE_COORDINATE
         cmd.coordinate_target = msg.point
         # cmd.feed_rate = DEFAULT_AUTONOMOUS_FEED_RATE
-        self.cmd_pub.publish(cmd)
+        self.manipulator_cmd_pub.publish(cmd)
 
 
 def main(args=None):

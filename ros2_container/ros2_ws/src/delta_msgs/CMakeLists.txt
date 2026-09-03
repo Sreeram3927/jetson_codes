@@ -37,6 +37,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TargetArray.msg"
   "msg/ManipulatorCommand.msg"
   "msg/ManipulatorTelemetry.msg"
+  "msg/BaseStatus.msg"
   DEPENDENCIES std_msgs geometry_msgs
 )
 
