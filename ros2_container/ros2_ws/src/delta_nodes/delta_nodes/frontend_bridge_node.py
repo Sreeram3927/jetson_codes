@@ -41,10 +41,18 @@ Inbound (frontend -> ROS2), matches bridge.ts's wsXxxCommand() functions:
        firmware's comms watchdog soft-stops after 300ms of silence, whatever
        calls this while a button is held must resend it at an interval
        shorter than that (e.g. every 100-150ms), not just once on press.
-  {"type":"set_autonomy","enabled":true|false}   # kept from original design;
-                                                   # not seen in bridge.ts —
-                                                   # confirm this still exists
-                                                   # on the frontend side.
+  {"type":"set_autonomy","enabled":true|false}
+    -- CHANGED: this is now a HEARTBEAT, not a one-shot toggle. While the
+       frontend wants autonomy on, it must keep resending enabled=true on an
+       interval well under AUTONOMY_HEARTBEAT_TIMEOUT (1000ms) below - see
+       useRobotWebSocket's setAutonomyEnabled, which resends every 300ms.
+       If this stops arriving while autonomy is on (frontend crashed, tab
+       backgrounded and throttled, network dropped, etc.), this node forces
+       autonomy back to false on its own - a one-shot "turn on and forget"
+       message would leave autonomy stuck on with nobody watching. A single
+       enabled=false message is enough to turn it off immediately (no
+       heartbeat needed for "off"). Also forced off immediately if every
+       websocket client disconnects.
 
 Outbound (ROS2 -> frontend), matches bridge.ts's parseBridgeMessages():
   {"type":"telemetry","timestamp":...,"j1":..,"j2":..,"j3":..}
@@ -57,11 +65,17 @@ Outbound (ROS2 -> frontend), matches bridge.ts's parseBridgeMessages():
        mobile_base_bridge_node from the Arduino's telemetry. bridge.ts's
        parseBridgeMessages() needs a case added for "base_status" — this
        is the E-stop/laser/motion indicator for the operator UI.
+  {"type":"system_status","autonomy_enabled":bool}
+    -- NEW: the CONFIRMED autonomy state (post heartbeat-watchdog), not just
+       an echo of the last request — this is what the UI toggle should
+       display, so a heartbeat-timeout forced-off is visible to the operator
+       instead of the toggle silently lying about being on.
 """
 
 import asyncio
 import json
 import threading
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -72,6 +86,9 @@ from delta_msgs.msg import ManipulatorCommand, ManipulatorTelemetry, TargetArray
 from std_msgs.msg import Bool, String, UInt8
 
 TELEMETRY_RATE_HZ = 10
+
+AUTONOMY_HEARTBEAT_TIMEOUT_SEC = 1.0
+AUTONOMY_WATCHDOG_PERIOD_SEC = 0.2
 
 
 class FrontendBridgeNode(Node):
@@ -85,17 +102,18 @@ class FrontendBridgeNode(Node):
         self._latest_motion_state = 0
         self._latest_autonomy_enabled = False
         self._latest_base_status = BaseStatus()
+        self._last_autonomy_heartbeat = 0.0  # monotonic seconds; 0 = never received
 
         self.manipulator_cmd_pub = self.create_publisher(ManipulatorCommand, '/frontend/manipulator_cmd', 10)
         self.base_cmd_pub = self.create_publisher(String, '/frontend/base_cmd', 10)
         self.autonomy_pub = self.create_publisher(Bool, '/system/autonomy_enabled', 10)
         self.cmd_vel_pub = self.create_publisher(Twist, '/base/cmd_vel', 10)
 
-        self.create_subscription(ManipulatorTelemetry, '/manipulator/telemetry', self._on_telemetry, 10)
+        self.create_subscription(ManipulatorTelemetry, '/manipulator/telemetry', self._broadcast_telemetry, 10)
         self.create_subscription(UInt8, '/base/motion_state', self._on_motion_state, 10)
         self.create_subscription(Bool, '/system/autonomy_enabled', self._on_autonomy_state, 10)
         self.create_subscription(TargetArray, '/manipulator/targets', self._on_target_detections, 10)
-        self.create_subscription(BaseStatus, '/base/status', self._on_base_status, 10)
+        self.create_subscription(BaseStatus, '/base/status', self._broadcast_base_status, 10)
 
         self.create_subscription(String, '/manipulator/log', self._on_log, 10)
         self.create_subscription(String, '/base/log', self._on_log, 10)
@@ -105,8 +123,8 @@ class FrontendBridgeNode(Node):
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
 
-        self.create_timer(1.0 / TELEMETRY_RATE_HZ, self._broadcast_telemetry)
-        self.create_timer(1.0 / TELEMETRY_RATE_HZ, self._broadcast_base_status)
+        self.create_timer(1.0 / TELEMETRY_RATE_HZ, self._broadcast_system_status)
+        self.create_timer(AUTONOMY_WATCHDOG_PERIOD_SEC, self._check_autonomy_heartbeat)
 
     def _run_loop(self):
         asyncio.set_event_loop(self._loop)
@@ -128,6 +146,10 @@ class FrontendBridgeNode(Node):
             pass
         finally:
             self._clients.discard(websocket)
+            # If nobody is left connected, don't wait out the heartbeat
+            # timeout - we know with certainty there's no one to hear from.
+            if not self._clients:
+                self._force_autonomy_off("frontend disconnected")
 
     # ------------------------------------------------------------------
     # Inbound
@@ -139,13 +161,20 @@ class FrontendBridgeNode(Node):
             self.get_logger().warn("Invalid JSON from frontend")
             return
 
-        # Kept from the original design — not present in bridge.ts as
-        # shown, so this path is unverified. Remove if the frontend
-        # doesn't actually have an autonomy toggle.
         if data.get('type') == 'set_autonomy':
-            out = Bool()
-            out.data = bool(data.get('enabled', False))
-            self.autonomy_pub.publish(out)
+            enabled = bool(data.get('enabled', False))
+            if enabled:
+                # Heartbeat - record it and (re)publish. Redundant repeat
+                # publishes while held on are harmless.
+                self._last_autonomy_heartbeat = time.monotonic()
+                if not self._latest_autonomy_enabled:
+                    self.get_logger().info("Autonomy enabled")
+                self._latest_autonomy_enabled = True
+                out = Bool()
+                out.data = True
+                self.autonomy_pub.publish(out)
+            else:
+                self._force_autonomy_off("frontend requested off")
             return
 
         target = data.get('target')
@@ -223,19 +252,42 @@ class FrontendBridgeNode(Node):
     # ------------------------------------------------------------------
     # Outbound
     # ------------------------------------------------------------------
-    def _on_telemetry(self, msg: ManipulatorTelemetry):
-        self._latest_telemetry = msg
-
     def _on_motion_state(self, msg: UInt8):
         self._latest_motion_state = msg.data
 
     def _on_autonomy_state(self, msg: Bool):
         self._latest_autonomy_enabled = msg.data
 
-    def _on_base_status(self, msg: BaseStatus):
-        self._latest_base_status = msg
+    # ------------------------------------------------------------------
+    # Autonomy heartbeat watchdog
+    # ------------------------------------------------------------------
+    def _force_autonomy_off(self, reason: str):
+        if not self._latest_autonomy_enabled:
+            return
+        self._latest_autonomy_enabled = False
+        out = Bool()
+        out.data = False
+        self.autonomy_pub.publish(out)
+        self.get_logger().warn(f"Autonomy forced off - {reason}")
 
-    def _broadcast_telemetry(self):
+    def _check_autonomy_heartbeat(self):
+        if not self._latest_autonomy_enabled:
+            return
+        if time.monotonic() - self._last_autonomy_heartbeat > AUTONOMY_HEARTBEAT_TIMEOUT_SEC:
+            self._force_autonomy_off("heartbeat timeout - frontend may have crashed or disconnected")
+
+    def _broadcast_system_status(self):
+        if not self._clients:
+            return
+        payload = json.dumps({
+            "type": "system_status",
+            "autonomy_enabled": self._latest_autonomy_enabled,
+        })
+        asyncio.run_coroutine_threadsafe(self._send_to_all(payload), self._loop)
+
+    def _broadcast_telemetry(self, msg: ManipulatorTelemetry):
+        self._latest_telemetry = msg
+
         if not self._clients:
             return
 
@@ -250,7 +302,9 @@ class FrontendBridgeNode(Node):
 
         asyncio.run_coroutine_threadsafe(self._send_to_all(payload), self._loop)
 
-    def _broadcast_base_status(self):
+    def _broadcast_base_status(self, msg: BaseStatus):
+        self._latest_base_status = msg
+
         if not self._clients:
             return
 
@@ -288,7 +342,7 @@ class FrontendBridgeNode(Node):
 
     def _on_log(self, data: String):
         asyncio.run_coroutine_threadsafe(self._send_to_all(data.data), self._loop)
-    
+
     async def _send_to_all(self, payload: str):
         if not self._clients:
             return
