@@ -1,0 +1,4 @@
+# Request: empty -- this is a pure "give me the current state" query
+---
+# Response
+delta_msgs/Target[] targets
