@@ -79,6 +79,7 @@ import time
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
 import websockets
 
 from geometry_msgs.msg import Twist
@@ -88,7 +89,13 @@ from std_msgs.msg import Bool, String, UInt8
 TELEMETRY_RATE_HZ = 10
 
 AUTONOMY_HEARTBEAT_TIMEOUT_SEC = 1.0
-AUTONOMY_WATCHDOG_PERIOD_SEC = 0.2
+AUTONOMY_WATCHDOG_PERIOD_SEC = 0.3
+
+LATCHED_QOS = QoSProfile(
+    depth=1,
+    reliability=QoSReliabilityPolicy.RELIABLE,
+    durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+)
 
 
 class FrontendBridgeNode(Node):
@@ -99,18 +106,16 @@ class FrontendBridgeNode(Node):
         self.declare_parameter('ws_port', 8765)
 
         self._latest_telemetry = ManipulatorTelemetry()
-        self._latest_motion_state = 0
         self._latest_autonomy_enabled = False
         self._latest_base_status = BaseStatus()
         self._last_autonomy_heartbeat = 0.0  # monotonic seconds; 0 = never received
 
         self.manipulator_cmd_pub = self.create_publisher(ManipulatorCommand, '/frontend/manipulator_cmd', 10)
         self.base_cmd_pub = self.create_publisher(String, '/frontend/base_cmd', 10)
-        self.autonomy_pub = self.create_publisher(Bool, '/system/autonomy_enabled', 10)
         self.cmd_vel_pub = self.create_publisher(Twist, '/base/cmd_vel', 10)
+        self.autonomy_pub = self.create_publisher(Bool, '/system/autonomy_enabled', LATCHED_QOS)
 
         self.create_subscription(ManipulatorTelemetry, '/manipulator/telemetry', self._broadcast_telemetry, 10)
-        self.create_subscription(UInt8, '/base/motion_state', self._on_motion_state, 10)
         self.create_subscription(Bool, '/system/autonomy_enabled', self._on_autonomy_state, 10)
         self.create_subscription(TargetArray, '/manipulator/targets', self._on_target_detections, 10)
         self.create_subscription(BaseStatus, '/base/status', self._broadcast_base_status, 10)
@@ -163,18 +168,25 @@ class FrontendBridgeNode(Node):
 
         if data.get('type') == 'set_autonomy':
             enabled = bool(data.get('enabled', False))
+
             if enabled:
-                # Heartbeat - record it and (re)publish. Redundant repeat
-                # publishes while held on are harmless.
+                # Heartbeat: update timestamp only.
                 self._last_autonomy_heartbeat = time.monotonic()
+                # Publish only on OFF -> ON transition.
                 if not self._latest_autonomy_enabled:
+                    self._latest_autonomy_enabled = True
+                    out = Bool()
+                    out.data = True
+                    self.autonomy_pub.publish(out)
                     self.get_logger().info("Autonomy enabled")
-                self._latest_autonomy_enabled = True
-                out = Bool()
-                out.data = True
-                self.autonomy_pub.publish(out)
             else:
-                self._force_autonomy_off("frontend requested off")
+                # Publish only on ON -> OFF transition.
+                if self._latest_autonomy_enabled:
+                    self._latest_autonomy_enabled = False
+                    out = Bool()
+                    out.data = False
+                    self.autonomy_pub.publish(out)
+                    self.get_logger().info("Autonomy disabled")
             return
 
         target = data.get('target')
@@ -250,11 +262,8 @@ class FrontendBridgeNode(Node):
         self.cmd_vel_pub.publish(twist)
 
     # ------------------------------------------------------------------
-    # Outbound
+    # System state
     # ------------------------------------------------------------------
-    def _on_motion_state(self, msg: UInt8):
-        self._latest_motion_state = msg.data
-
     def _on_autonomy_state(self, msg: Bool):
         self._latest_autonomy_enabled = msg.data
 
@@ -276,6 +285,9 @@ class FrontendBridgeNode(Node):
         if time.monotonic() - self._last_autonomy_heartbeat > AUTONOMY_HEARTBEAT_TIMEOUT_SEC:
             self._force_autonomy_off("heartbeat timeout - frontend may have crashed or disconnected")
 
+    # ------------------------------------------------------------------
+    # Outbound
+    # ------------------------------------------------------------------
     def _broadcast_system_status(self):
         if not self._clients:
             return

@@ -20,7 +20,7 @@ Subscribes:
 
 Publishes:
   /base/log            (std_msgs/String)   JSON log lines, as before
-  /base/motion_state   (std_msgs/UInt8)    0=STOPPED 1=MOVING
+  /base/motion_state   (std_msgs/Bool)    0=STOPPED 1=MOVING
       Derived directly from the Arduino's actual-velocity telemetry now,
       not a settle-timer heuristic — the firmware tells us the ramped
       actual speed, so "moving" is just "is that nonzero", no guessing.
@@ -38,19 +38,26 @@ import json
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
 import serial
 
 from geometry_msgs.msg import Twist
-from std_msgs.msg import String, UInt8
+from std_msgs.msg import String, UInt8, Bool
 
 from delta_msgs.msg import BaseStatus
 
 from .protocol import arduino_protocol
 
-MOTION_STOPPED = 0
-MOTION_MOVING = 1
+MOTION_STOPPED = False
+MOTION_MOVING = True
 
 VERSION_RETRY_PERIOD_SEC = 3.0
+
+LATCHED_QOS = QoSProfile(
+    depth=1,
+    reliability=QoSReliabilityPolicy.RELIABLE,
+    durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+)
 
 
 class MobileBaseBridgeNode(Node):
@@ -60,6 +67,7 @@ class MobileBaseBridgeNode(Node):
         self.declare_parameter('serial_port', '/dev/arduino_uno')
         self.declare_parameter('baud_rate', 115200)
         self.declare_parameter('poll_period_sec', 0.01)
+
         # Twist input magnitude that maps to +-100% of configured max speed.
         # Defaults assume normalized -1.0..1.0 input. Set to real m/s / rad/s
         # once you've measured actual top speed and want physical units.
@@ -86,7 +94,7 @@ class MobileBaseBridgeNode(Node):
         self._version_confirmed = False
 
         self.log_pub = self.create_publisher(String, '/base/log', 10)
-        self.motion_state_pub = self.create_publisher(UInt8, '/base/motion_state', 10)
+        self.motion_state_pub = self.create_publisher(Bool, '/base/motion_state', LATCHED_QOS)
         self.status_pub = self.create_publisher(BaseStatus, '/base/status', 10)
 
         self.cmd_vel_sub = self.create_subscription(Twist, '/base/cmd_vel', self._on_cmd_vel, 10)
@@ -170,7 +178,7 @@ class MobileBaseBridgeNode(Node):
         motion_state = MOTION_MOVING if moving else MOTION_STOPPED
         if motion_state != self._last_motion_state:
             self._last_motion_state = motion_state
-            out = UInt8()
+            out = Bool()
             out.data = motion_state
             self.motion_state_pub.publish(out)
 

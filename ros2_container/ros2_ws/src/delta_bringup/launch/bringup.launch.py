@@ -23,11 +23,11 @@ def generate_launch_description():
             package='delta_nodes', executable='target_transform', name='target_transform',
             output='screen',
         ),
-        # Node(
-        #     package='delta_nodes', executable='target_selector', name='target_selector',
-        #     parameters=[{'policy': 'highest_confidence'}],
-        #     output='screen',
-        # ),
+        Node(
+            package='delta_nodes', executable='target_tracker', name='target_tracker',
+            parameters=[],
+            output='screen',
+        ),
         Node(
             package='delta_nodes', executable='command_arbiter', name='command_arbiter',
             output='screen',

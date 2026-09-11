@@ -20,11 +20,12 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'autonomy_sequencer = delta_nodes.autonomy_sequencer_node:main',
             'manipulator_bridge = delta_nodes.manipulator_bridge_node:main',
             'mobile_base_bridge = delta_nodes.mobile_base_bridge_node:main',
             'camera_target_bridge = delta_nodes.camera_target_bridge_node:main',
             'target_transform = delta_nodes.target_transform_node:main',
-            'target_selector = delta_nodes.target_selector_node:main',
+            'target_tracker = delta_nodes.target_tracker_node:main',
             'command_arbiter = delta_nodes.command_arbiter_node:main',
             'frontend_bridge = delta_nodes.frontend_bridge_node:main',
         ],

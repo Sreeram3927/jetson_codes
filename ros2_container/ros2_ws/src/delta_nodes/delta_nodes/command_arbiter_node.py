@@ -8,7 +8,7 @@ Subscribes:
   /manipulator/target_selected        (geometry_msgs/PointStamped)  -- autonomous
   /frontend/manual_manipulator_cmd    (delta_msgs/ManipulatorCommand) -- manual, from frontend_bridge
   /system/autonomy_enabled            (std_msgs/Bool)
-  /base/motion_state                  (std_msgs/UInt8)  0=STOPPED 1=MOVING
+  /base/motion_state                  (std_msgs/Bool)  0=STOPPED 1=MOVING
 
 Publishes:
   /manipulator/cmd                    (delta_msgs/ManipulatorCommand) -- to manipulator_bridge
@@ -28,7 +28,7 @@ from rclpy.node import Node
 
 from delta_msgs.msg import ManipulatorCommand
 from geometry_msgs.msg import PointStamped
-from std_msgs.msg import Bool, UInt8, String
+from std_msgs.msg import Bool, String
 
 DEFAULT_AUTONOMOUS_FEED_RATE = 0.05  # m/s -- TODO: tune
 
@@ -46,13 +46,13 @@ class CommandArbiterNode(Node):
         self.create_subscription(PointStamped, '/manipulator/target_selected', self._on_target, 10)
         self.create_subscription(ManipulatorCommand, '/frontend/manipulator_cmd', self._on_manipulator_cmd, 10)
         self.create_subscription(Bool, '/system/autonomy_enabled', self._on_autonomy_enabled, 10)
-        # self.create_subscription(UInt8, '/base/motion_state', self._on_motion_state, 10)
+        # self.create_subscription(Bool, '/base/motion_state', self._on_motion_state, 10)
         self.create_subscription(String, '/frontend/base_cmd', self._on_base_cmd, 10)
 
     def _on_autonomy_enabled(self, msg: Bool):
         self.autonomy_enabled = msg.data
 
-    # def _on_motion_state(self, msg: UInt8):
+    # def _on_motion_state(self, msg: Bool):
     #     self.base_motion_state = msg.data
 
     def _on_manipulator_cmd(self, msg: ManipulatorCommand):
